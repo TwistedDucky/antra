@@ -58,9 +58,6 @@ pip install -r requirements.txt
 ```bash
 # Terminal 1: Start the Computer Vision Backend
 uvicorn backend.main:app --reload
-
-# Terminal 2: Serve the Premium Frontend
-python -m http.server 5500 --directory frontend
 ```
 Then open `http://localhost:5500` and prepare to be amazed.
 
