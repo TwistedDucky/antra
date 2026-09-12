@@ -4,6 +4,8 @@
 
 # ANTRA — Strava for Ants 🐜 🎯
 
+> **Live :** [ANTRA](https://antra-7vjb.onrender.com/)  
+
 
 ## Basic Details
 ### Team Name: Zero
@@ -41,8 +43,8 @@ For Software:
 # Installation
 ```bash
 # Clone the repository
-git clone https://github.com/TwistedDucky/useless_project_temp.git
-cd useless_project_temp
+git clone https://github.com/TwistedDucky/antra.git
+cd antra
 
 # Set up the Python environment
 python -m venv venv
@@ -65,9 +67,9 @@ Then open `http://localhost:5500` and prepare to be amazed.
 ### Project Documentation
 For Software:
 
-# Screenshots (Add at least 3)
-![Screenshot1](./screenshots/)
-*The landing page. Notice the premium glassmorphism and the wobbly hero ant. Apple, take notes.*
+# Screenshots 
+![Screenshot1](./screenshots/1.png)
+*The landing page.Notice the premium glassmorphism and the wobbly hero ant. Apple, take notes.*
 
 ![Screenshot2](./screenshots/2.png)
 *The highly sophisticated upload zone where you submit your ant footage. Spiders will be rejected.*
@@ -75,24 +77,25 @@ For Software:
 ![Screenshot3](./screenshots/3.png)
 *The Results Dashboard. Shows the exact route, crumbs burned, and the number of times the ant stopped for a "meeting".*
 
-# Diagrams
-![Workflow](https://via.placeholder.com/800x400.png?text=Ant+->+Camera+->+OpenCV+->+Profit)
-*Our highly scalable microservices architecture for processing ant movements.*
+![Screenshot4](./screenshots/4.png)
+*Activity Dashboard. We found the ant! Look at those impressive crumb-burning stats.*
+![Screenshot5](./screenshots/5.png)
+*The Expedition Map. A complete visual representation of an ant wandering aimlessly.*
+![Screenshot6](./screenshots/6.png)
+*OpenCV output.*
 
-For Hardware:
-*(Not applicable, unless you count the breadcrumbs.)*
 
 
 ### Project Demo
-# Live Deployment
-🚀 **[Try ANTRA Live Here!](https://antra-7vjb.onrender.com/)**
+# Video 1:AntraDemo
 
-# Video
-[Add your demo video link here]
-*Watch in awe as an ant walks in a circle for 30 seconds while our system calculates its VO2 Max.*
+[https://www.youtube.com/watch?v=kh1ZGcWbOM8]
 
-# Additional Demos
-- We plan to add a leaderboard. Currently, "Dave the Ant" is in 1st place.
+ # Video 2:Internal Working of Antra
+[https://www.youtube.com/watch?v=RmvI3SCjMr4&feature=youtu.be]
+
+
+
 
 
 
