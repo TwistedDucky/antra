@@ -4,7 +4,8 @@
 
 # ANTRA — Strava for Ants 🐜 🎯
 
-> **Live :** [ANTRA](https://antra-7vjb.onrender.com/)  
+> **Live :** [ANTRA](https://antra-7vjb.onrender.com/)
+> (Won't work because opencv is resource intensive since a whole video is processed.)
 
 
 ## Basic Details
