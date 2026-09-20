@@ -269,32 +269,23 @@ def score_candidate(
 
 def analyze_video(video_path: str):
 
-    cap = cv2.VideoCapture(
-        video_path
-    )
+    cap = cv2.VideoCapture(video_path)
 
     if not cap.isOpened():
+        raise ValueError("Could not open video")
 
-        raise ValueError(
-            "Could not open video"
-        )
-
-    fps = cap.get(
-        cv2.CAP_PROP_FPS
-    )
+    fps = cap.get(cv2.CAP_PROP_FPS)
 
     if fps <= 0:
         fps = 30.0
 
     total_frames = int(
-        cap.get(
-            cv2.CAP_PROP_FRAME_COUNT
-        )
+        cap.get(cv2.CAP_PROP_FRAME_COUNT)
     )
 
-    # --------------------------------------------------------
+    # ============================================================
     # ORB camera motion detector
-    # --------------------------------------------------------
+    # ============================================================
 
     orb = cv2.ORB_create(
         nfeatures=ORB_FEATURES
@@ -312,9 +303,31 @@ def analyze_video(video_path: str):
     max_speed = 0.0
     moving_time = 0.0
 
+    # ============================================================
+    # STOP TRACKING
+    # ============================================================
+
     stop_count = 0
     longest_stop = 0.0
-    current_stop = 0.0
+
+    # Number of consecutive stationary frames
+    stationary_frames = 0
+
+    # True only after the stationary period has been
+    # confirmed as an actual stop
+    is_stopped = False
+
+    # Frame where the current stop started
+    stop_start_frame = None
+
+    # Require the ant to be stationary for this long
+    # before calling it a stop.
+    STOP_DURATION = 0.5
+
+    STOP_CONFIRM_FRAMES = max(
+        1,
+        int(fps * STOP_DURATION)
+    )
 
     lost_frames = 0
 
@@ -335,9 +348,9 @@ def analyze_video(video_path: str):
 
         debug_frame = frame.copy()
 
-        # ====================================================
+        # ========================================================
         # PREPROCESS
-        # ====================================================
+        # ========================================================
 
         gray = cv2.cvtColor(
             frame,
@@ -359,17 +372,14 @@ def analyze_video(video_path: str):
                 debug_frame
             )
 
-            if (
-                cv2.waitKey(1) & 0xFF
-                == ord("q")
-            ):
+            if cv2.waitKey(1) & 0xFF == ord("q"):
                 break
 
             continue
 
-        # ====================================================
+        # ========================================================
         # CAMERA MOTION
-        # ====================================================
+        # ========================================================
 
         camera_dx, camera_dy = (
             estimate_camera_motion(
@@ -386,9 +396,9 @@ def analyze_video(video_path: str):
             camera_dy
         )
 
-        # ====================================================
+        # ========================================================
         # MOTION DETECTION
-        # ====================================================
+        # ========================================================
 
         difference = cv2.absdiff(
             previous_gray,
@@ -427,9 +437,9 @@ def analyze_video(video_path: str):
             iterations=1
         )
 
-        # ====================================================
+        # ========================================================
         # FIND CONTOURS
-        # ====================================================
+        # ========================================================
 
         contours, _ = cv2.findContours(
             motion_mask,
@@ -439,15 +449,11 @@ def analyze_video(video_path: str):
 
         candidates = []
 
-        frame_height, frame_width = (
-            gray.shape
-        )
+        frame_height, frame_width = gray.shape
 
         for contour in contours:
 
-            area = cv2.contourArea(
-                contour
-            )
+            area = cv2.contourArea(contour)
 
             if area < MIN_AREA:
                 continue
@@ -455,11 +461,7 @@ def analyze_video(video_path: str):
             if area > MAX_AREA:
                 continue
 
-            x, y, w, h = (
-                cv2.boundingRect(
-                    contour
-                )
-            )
+            x, y, w, h = cv2.boundingRect(contour)
 
             if w <= 0 or h <= 0:
                 continue
@@ -473,28 +475,16 @@ def analyze_video(video_path: str):
             if aspect_ratio > 6:
                 continue
 
-            center_x = (
-                x + w / 2
-            )
-
-            center_y = (
-                y + h / 2
-            )
+            center_x = x + w / 2
+            center_y = y + h / 2
 
             candidate = {
-
                 "x": center_x,
-
                 "y": center_y,
-
                 "area": area,
-
                 "w": w,
-
                 "h": h,
-
-                "aspect_ratio":
-                    aspect_ratio
+                "aspect_ratio": aspect_ratio
             }
 
             candidate["score"] = (
@@ -506,31 +496,23 @@ def analyze_video(video_path: str):
                 )
             )
 
-            candidates.append(
-                candidate
-            )
+            candidates.append(candidate)
 
         selected = None
         tracking = False
 
-        # ====================================================
+        # ========================================================
         # TRACKING MODE
-        # ====================================================
+        # ========================================================
 
         if previous_position is not None:
-
-            # ------------------------------------------------
-            # Find candidates near previous ant position
-            # ------------------------------------------------
 
             nearby = []
 
             for candidate in candidates:
 
                 distance = math.dist(
-
                     previous_position,
-
                     (
                         candidate["x"],
                         candidate["y"]
@@ -547,35 +529,31 @@ def analyze_video(video_path: str):
                         )
                     )
 
-            # ------------------------------------------------
+            # ----------------------------------------------------
             # Select highest scoring nearby candidate
-            # ------------------------------------------------
+            # ----------------------------------------------------
 
             if nearby:
 
                 nearby.sort(
-                    key=lambda item:
-                        item[0],
+                    key=lambda item: item[0],
                     reverse=True
                 )
 
                 selected = nearby[0][2]
 
                 current_position = (
-
                     selected["x"],
-
                     selected["y"]
                 )
 
                 lost_frames = 0
-
                 tracking = True
 
             else:
 
                 # ------------------------------------------------
-                # No moving contour near ant
+                # No moving contour near ant.
                 #
                 # The ant may simply be standing still.
                 # Keep the last position for a while.
@@ -583,10 +561,7 @@ def analyze_video(video_path: str):
 
                 lost_frames += 1
 
-                if (
-                    lost_frames
-                    <= MAX_LOST_FRAMES
-                ):
+                if lost_frames <= MAX_LOST_FRAMES:
 
                     current_position = (
                         previous_position[0],
@@ -600,9 +575,9 @@ def analyze_video(video_path: str):
                     current_position = None
                     tracking = False
 
-        # ====================================================
+        # ========================================================
         # SEARCH MODE
-        # ====================================================
+        # ========================================================
 
         else:
 
@@ -610,17 +585,14 @@ def analyze_video(video_path: str):
 
             if candidates:
 
-                # Score all candidates
                 candidates.sort(
-                    key=lambda c:
-                        c["score"],
+                    key=lambda c: c["score"],
                     reverse=True
                 )
 
                 best = candidates[0]
 
                 position = (
-
                     best["x"],
                     best["y"]
                 )
@@ -632,27 +604,20 @@ def analyze_video(video_path: str):
                 if candidate_position is None:
 
                     candidate_position = position
-
                     candidate_frames = 1
 
                 else:
 
                     distance = math.dist(
-
                         candidate_position,
-
                         position
                     )
 
-                    if (
-                        distance
-                        <= MAX_CANDIDATE_JUMP
-                    ):
+                    if distance <= MAX_CANDIDATE_JUMP:
 
                         candidate_frames += 1
 
                         candidate_position = (
-
                             (
                                 candidate_position[0]
                                 + position[0]
@@ -667,7 +632,6 @@ def analyze_video(video_path: str):
                     else:
 
                         candidate_position = position
-
                         candidate_frames = 1
 
                 # ------------------------------------------------
@@ -675,43 +639,27 @@ def analyze_video(video_path: str):
                 # ------------------------------------------------
 
                 cv2.circle(
-
                     debug_frame,
-
                     (
-                        int(
-                            candidate_position[0]
-                        ),
-                        int(
-                            candidate_position[1]
-                        )
+                        int(candidate_position[0]),
+                        int(candidate_position[1])
                     ),
-
                     8,
-
                     (0, 255, 255),
-
                     2
                 )
 
                 cv2.putText(
-
                     debug_frame,
-
                     (
                         f"Candidate "
                         f"{candidate_frames}/"
                         f"{MIN_CONFIRM_FRAMES}"
                     ),
-
                     (20, 90),
-
                     cv2.FONT_HERSHEY_SIMPLEX,
-
                     0.6,
-
                     (0, 255, 255),
-
                     2
                 )
 
@@ -719,29 +667,21 @@ def analyze_video(video_path: str):
                 # Confirm ant
                 # ------------------------------------------------
 
-                if (
-                    candidate_frames
-                    >= MIN_CONFIRM_FRAMES
-                ):
+                if candidate_frames >= MIN_CONFIRM_FRAMES:
 
                     current_position = (
                         candidate_position[0],
                         candidate_position[1]
                     )
 
-                    previous_position = (
-                        current_position
-                    )
+                    previous_position = current_position
 
-                    smoothed_position = (
-                        current_position
-                    )
+                    smoothed_position = current_position
 
                     candidate_position = None
                     candidate_frames = 0
 
                     lost_frames = 0
-
                     tracking = True
 
             else:
@@ -749,9 +689,9 @@ def analyze_video(video_path: str):
                 candidate_position = None
                 candidate_frames = 0
 
-        # ====================================================
+        # ========================================================
         # PROCESS TRACKED POSITION
-        # ====================================================
+        # ========================================================
 
         if (
             tracking
@@ -759,15 +699,13 @@ def analyze_video(video_path: str):
             current_position is not None
         ):
 
-            # ------------------------------------------------
+            # ----------------------------------------------------
             # Smooth position
-            # ------------------------------------------------
+            # ----------------------------------------------------
 
             if smoothed_position is None:
 
-                smoothed_position = (
-                    current_position
-                )
+                smoothed_position = current_position
 
             else:
 
@@ -776,34 +714,32 @@ def analyze_video(video_path: str):
                     SMOOTHING_ALPHA *
                     current_position[0]
                     +
-                    (1 -
-                     SMOOTHING_ALPHA) *
+                    (1 - SMOOTHING_ALPHA) *
                     smoothed_position[0],
 
                     SMOOTHING_ALPHA *
                     current_position[1]
                     +
-                    (1 -
-                     SMOOTHING_ALPHA) *
+                    (1 - SMOOTHING_ALPHA) *
                     smoothed_position[1]
                 )
 
-            position = (
-                smoothed_position
-            )
+            position = smoothed_position
 
-            # ------------------------------------------------
+            # ----------------------------------------------------
             # Movement
-            # ------------------------------------------------
+            # ----------------------------------------------------
 
             movement = math.dist(
-
                 previous_position,
-
                 position
             )
 
             if movement >= MIN_MOVEMENT:
+
+                # =================================================
+                # ANT IS MOVING
+                # =================================================
 
                 total_distance += movement
 
@@ -816,65 +752,105 @@ def analyze_video(video_path: str):
                     speed_pixels
                 )
 
-                moving_time += (
-                    1 / fps
-                )
+                moving_time += 1 / fps
 
-                current_stop = 0.0
+                # ------------------------------------------------
+                # If we were stopped, the stop has ended.
+                # Finalize its duration.
+                # ------------------------------------------------
+
+                if is_stopped:
+
+                    if stop_start_frame is not None:
+
+                        stop_duration = (
+                            frame_number
+                            - stop_start_frame
+                        ) / fps
+
+                        longest_stop = max(
+                            longest_stop,
+                            stop_duration
+                        )
+
+                    is_stopped = False
+                    stop_start_frame = None
+
+                # Reset stationary counter
+                stationary_frames = 0
 
             else:
 
-                current_stop += (
-                    1 / fps
-                )
+                # =================================================
+                # ANT IS NOT MOVING
+                # =================================================
 
-                # Count stop after one second
+                stationary_frames += 1
+
+                # ------------------------------------------------
+                # Only declare a stop after enough consecutive
+                # stationary frames.
+                # ------------------------------------------------
+
                 if (
-                    current_stop >= 1.0
+                    not is_stopped
                     and
-                    (
-                        current_stop -
-                        1 / fps
-                    ) < 1.0
+                    stationary_frames >= STOP_CONFIRM_FRAMES
                 ):
+
+                    is_stopped = True
 
                     stop_count += 1
 
-                longest_stop = max(
-                    longest_stop,
-                    current_stop
-                )
+                    # Work backwards so the stop duration includes
+                    # the frames during which we were confirming it.
+                    stop_start_frame = (
+                        frame_number
+                        - stationary_frames
+                        + 1
+                    )
 
-            # ------------------------------------------------
+                # ------------------------------------------------
+                # Update longest stop while still stopped
+                # ------------------------------------------------
+
+                if is_stopped and stop_start_frame is not None:
+
+                    current_stop_duration = (
+                        frame_number
+                        - stop_start_frame
+                        + 1
+                    ) / fps
+
+                    longest_stop = max(
+                        longest_stop,
+                        current_stop_duration
+                    )
+
+            # ----------------------------------------------------
             # Save trajectory
-            # ------------------------------------------------
+            # ----------------------------------------------------
 
             trajectory.append({
+                "frame": frame_number,
 
-                "frame":
-                    frame_number,
+                "time": round(
+                    frame_number / fps,
+                    3
+                ),
 
-                "time":
-                    round(
-                        frame_number / fps,
-                        3
-                    ),
+                "x": round(
+                    position[0],
+                    2
+                ),
 
-                "x":
-                    round(
-                        position[0],
-                        2
-                    ),
-
-                "y":
-                    round(
-                        position[1],
-                        2
-                    )
+                "y": round(
+                    position[1],
+                    2
+                )
             })
 
             debug_trajectory.append(
-
                 (
                     int(position[0]),
                     int(position[1])
@@ -883,9 +859,9 @@ def analyze_video(video_path: str):
 
             previous_position = position
 
-        # ====================================================
+        # ========================================================
         # DRAW TRAJECTORY
-        # ====================================================
+        # ========================================================
 
         for i in range(
             1,
@@ -893,21 +869,16 @@ def analyze_video(video_path: str):
         ):
 
             cv2.line(
-
                 debug_frame,
-
                 debug_trajectory[i - 1],
-
                 debug_trajectory[i],
-
                 (0, 255, 0),
-
                 2
             )
 
-        # ====================================================
+        # ========================================================
         # DRAW ANT
-        # ====================================================
+        # ========================================================
 
         if (
             tracking
@@ -923,59 +894,57 @@ def analyze_video(video_path: str):
                 previous_position[1]
             )
 
-            # Outer circle
             cv2.circle(
-
                 debug_frame,
-
                 (
                     ant_x,
                     ant_y
                 ),
-
                 12,
-
                 (0, 0, 255),
-
                 2
             )
 
-            # Center
             cv2.circle(
-
                 debug_frame,
-
                 (
                     ant_x,
                     ant_y
                 ),
-
                 3,
-
                 (0, 0, 255),
-
                 -1
             )
 
-        # ====================================================
+        # ========================================================
         # STATUS
-        # ====================================================
+        # ========================================================
 
         if tracking:
 
-            status = "TRACKING"
+            if is_stopped:
 
-            status_color = (
-                0,
-                255,
-                0
-            )
+                status = "ANT ON BREAK"
+
+                status_color = (
+                    0,
+                    255,
+                    255
+                )
+
+            else:
+
+                status = "TRACKING"
+
+                status_color = (
+                    0,
+                    255,
+                    0
+                )
 
         elif lost_frames > 0:
 
-            status = (
-                f"LOST {lost_frames}"
-            )
+            status = f"LOST {lost_frames}"
 
             status_color = (
                 0,
@@ -993,16 +962,13 @@ def analyze_video(video_path: str):
                 255
             )
 
-        # ====================================================
+        # ========================================================
         # CURRENT SPEED
-        # ====================================================
+        # ========================================================
 
         current_speed = 0.0
 
-        if (
-            len(debug_trajectory)
-            >= 2
-        ):
+        if len(debug_trajectory) >= 2:
 
             p1 = debug_trajectory[-2]
             p2 = debug_trajectory[-1]
@@ -1013,232 +979,224 @@ def analyze_video(video_path: str):
             )
 
             current_speed = (
-
                 movement *
                 fps /
                 PIXELS_PER_ANT_METER
             )
 
         distance_meters = (
-
             total_distance /
             PIXELS_PER_ANT_METER
         )
 
-        # ====================================================
+        # ========================================================
         # DEBUG TEXT
-        # ====================================================
+        # ========================================================
 
         cv2.putText(
-
             debug_frame,
-
             status,
-
             (20, 30),
-
             cv2.FONT_HERSHEY_SIMPLEX,
-
             0.8,
-
             status_color,
-
             2
         )
 
         cv2.putText(
-
             debug_frame,
-
             (
                 f"Distance: "
                 f"{distance_meters:.2f} ant m"
             ),
-
             (20, 60),
-
             cv2.FONT_HERSHEY_SIMPLEX,
-
             0.6,
-
             (255, 255, 255),
-
             2
         )
 
         cv2.putText(
-
             debug_frame,
-
             (
                 f"Speed: "
                 f"{current_speed:.2f} ant m/s"
             ),
-
             (20, 120),
-
             cv2.FONT_HERSHEY_SIMPLEX,
-
             0.6,
-
             (255, 255, 255),
-
             2
         )
 
         cv2.putText(
-
             debug_frame,
-
             (
                 f"Camera: "
                 f"{camera_dx:.1f}, "
                 f"{camera_dy:.1f}"
             ),
-
             (20, 150),
-
             cv2.FONT_HERSHEY_SIMPLEX,
-
             0.6,
-
             (255, 255, 255),
-
             2
         )
 
         cv2.putText(
-
             debug_frame,
-
             (
                 f"Frame: "
                 f"{frame_number}/"
                 f"{total_frames}"
             ),
-
             (20, 180),
-
             cv2.FONT_HERSHEY_SIMPLEX,
-
             0.6,
-
             (255, 255, 255),
-
             2
         )
 
         cv2.putText(
-
             debug_frame,
-
             (
                 f"Stops: "
                 f"{stop_count}"
             ),
-
             (20, 210),
-
             cv2.FONT_HERSHEY_SIMPLEX,
-
             0.6,
-
             (255, 255, 255),
-
             2
         )
 
+        # Show current stop duration
+        if is_stopped and stop_start_frame is not None:
+
+            current_stop_duration = (
+                frame_number
+                - stop_start_frame
+                + 1
+            ) / fps
+
+            cv2.putText(
+                debug_frame,
+                (
+                    f"Break: "
+                    f"{current_stop_duration:.1f}s"
+                ),
+                (20, 240),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.6,
+                (0, 255, 255),
+                2
+            )
+
+        else:
+
+            cv2.putText(
+                debug_frame,
+                "Break: 0.0s",
+                (20, 240),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.6,
+                (200, 200, 200),
+                2
+            )
+
         cv2.putText(
-
             debug_frame,
-
             "Q = quit",
-
-            (20, 240),
-
+            (20, 270),
             cv2.FONT_HERSHEY_SIMPLEX,
-
             0.5,
-
             (200, 200, 200),
-
             1
         )
 
-        # ====================================================
+        # ========================================================
         # SHOW DEBUG WINDOWS
-        # ====================================================
+        # ========================================================
 
         cv2.imshow(
             "Ant Tracking Debug",
             debug_frame
         )
 
-        # Motion mask
         cv2.imshow(
             "Motion Mask",
             motion_mask
         )
 
-        # ====================================================
+        # ========================================================
         # QUIT
-        # ====================================================
+        # ========================================================
 
         key = cv2.waitKey(1) & 0xFF
 
         if key == ord("q"):
-
             break
 
         previous_gray = stabilized_gray
 
-    # ========================================================
+    # ============================================================
+    # FINISH ANY STOP THAT CONTINUES UNTIL VIDEO END
+    # ============================================================
+
+    if (
+        is_stopped
+        and
+        stop_start_frame is not None
+    ):
+
+        stop_duration = (
+            frame_number
+            - stop_start_frame
+            + 1
+        ) / fps
+
+        longest_stop = max(
+            longest_stop,
+            stop_duration
+        )
+
+    # ============================================================
     # CLEANUP
-    # ========================================================
+    # ============================================================
 
     cap.release()
 
     cv2.destroyAllWindows()
 
-    # ========================================================
+    # ============================================================
     # STATISTICS
-    # ========================================================
+    # ============================================================
 
     distance = (
-
         total_distance /
         PIXELS_PER_ANT_METER
     )
 
     average_speed_pixels = (
-
         total_distance /
         moving_time
-
         if moving_time > 0
-
         else 0
     )
 
     average_speed = (
-
         average_speed_pixels /
         PIXELS_PER_ANT_METER
     )
 
     ant_max_speed = (
-
         max_speed /
         PIXELS_PER_ANT_METER
     )
 
     elapsed_time = (
-
-        total_frames /
-        fps
-
+        total_frames / fps
         if fps > 0
-
         else 0
     )
 
@@ -1254,7 +1212,6 @@ def analyze_video(video_path: str):
     if ant_max_speed > 0:
 
         terrain_score = int(
-
             (
                 1 -
                 average_speed /
@@ -1275,18 +1232,16 @@ def analyze_video(video_path: str):
         terrain_score = 0
 
     fitness_score = int(
-
         min(
             100,
-
             distance * 5 +
             average_speed * 10
         )
     )
 
-    # ========================================================
+    # ============================================================
     # ACHIEVEMENTS
-    # ========================================================
+    # ============================================================
 
     achievements = []
 
@@ -1331,6 +1286,10 @@ def analyze_video(video_path: str):
         achievements.append(
             "Ant in Training"
         )
+
+    # ============================================================
+    # RESULT
+    # ============================================================
 
     return {
 
