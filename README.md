@@ -36,6 +36,29 @@ Humans get all the credit for running marathons, while ants walk the equivalent 
 ### The Solution (that nobody asked for)
 We built a state-of-the-art computer vision platform. You record an ant doing its thing, and our system tracks its exact path, calculates its "Ant Velocity" (AM/s), maps the expedition, and awards "Antchievements". We also gave it an absurdly premium, Apple-style dark mode UI because ants deserve luxury too.
 
+## 🧙‍♂️ THE FORBIDDEN ANT-METER EQUATION
+
+$$
+\boxed{
+A_m =
+\frac{
+\sum\sqrt{(x_i-x_{i-1})^2+(y_i-y_{i-1})^2}
+}{
+100
+}
+}
+$$
+
+### In human language:
+
+**Pixels travelled ÷ 100 = AntMeters™**
+
+The constant **100** was discovered through years of rigorous research,
+advanced mathematics, and absolutely no research whatsoever.
+
+> *"Why 100 pixels?"*  
+> **"Because 73 looked suspicious."** 🐜
+
 ## Technical Details
 ### Technologies/Components Used
 For Software:
