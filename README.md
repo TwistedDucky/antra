@@ -7,6 +7,7 @@
 > **Live :** [ANTRA](https://antra-7vjb.onrender.com/)
 > (Won't work because opencv is resource intensive since a whole video is processed.)
 > Run it on your pc to see the full magic, you can see the over-engineered motion mask and tracking debug view.
+##If you don't have an ant of your own you can use our sample input video present in the uploads folder.
 
 
 ## Basic Details
@@ -76,22 +77,17 @@ Then open `http://localhost:8000` and prepare to be amazed.
 *The Results Dashboard. Shows the exact route, crumbs burned, and the number of times the ant stopped for a "meeting".*
 
 ![Screenshot4](./screenshots/4.png)
-*Activity Dashboard. We found the ant! Look at those impressive crumb-burning stats.*
-![Screenshot5](./screenshots/5.png)
 *The Expedition Map. A complete visual representation of an ant wandering aimlessly.*
+![Screenshot5](./screenshots/5.png)
+*Activity Dashboard. We found the ant! Look at those impressive crumb-burning stats.*
 ![Screenshot6](./screenshots/6.png)
 *OpenCV output.*
 
 
 
 ### Project Demo
-# Video 1:AntraDemo
-
-[https://www.youtube.com/watch?v=kh1ZGcWbOM8]
-
- # Video 2:Internal Working of Antra
-[https://www.youtube.com/watch?v=RmvI3SCjMr4&feature=youtu.be]
-
+# Video 1:AntraDemo on Local host
+[https://www.youtube.com/watch?v=N6Sd7NWsxX8]
 
 
 
