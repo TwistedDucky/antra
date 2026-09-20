@@ -9,23 +9,38 @@
 > Run it on your pc to see the full magic, you can see the over-engineered motion mask and tracking debug view.
 ##If you don't have an ant of your own you can use our sample input video present in the uploads folder.
 
+## 📋 Basic Details
 
-## Basic Details
-### Team Name: Zero
+### 🏷️ Team Name
+**Zero**
 
+### 👨‍💻 Team Members
 
-### Team Members
-- Jion Biju - Vimal Jyothi Engineering College
-- Richard Rarichan - Vimal Jyothi Engineering College
-  
-*Special thanks to our highly cooperative test subject, **ANDAPPAN**, who graciously provided us with the first input video and then immediately scooted away into the unknown.
+- **Jion Biju** — Vimal Jyothi Engineering College
+- **Richard Rarichan** — Vimal Jyothi Engineering College
 
-His current whereabouts remain classified.
+---
 
-Without ANDAPPAN’s groundbreaking contribution, extensive fieldwork, and suspiciously fast escape, this completely unnecessary platform would never have been possible.
+### 🐜 Special Thanks
 
-We salute you, wherever you are. 🫡🐜
+A very special thanks to our highly cooperative test subject,  
+**ANDAPPAN**.
 
+ANDAPPAN graciously provided us with the **first input video** and then
+immediately scooted away into the unknown.
+
+His current whereabouts remain **classified**.
+
+Without ANDAPPAN's groundbreaking contribution, extensive fieldwork,
+and suspiciously fast escape, this completely unnecessary platform
+would never have been possible.
+
+> **We salute you, wherever you are.** 🫡🐜
+>
+> *Gone, but never forgotten.*
+
+**ANDAPPAN — 2026**  
+*Test Subject • Pioneer • Fugitive*
 
 ### Project Description
 ANTRA is a premium, over-engineered athletic tracking platform designed exclusively for ants. It analyzes video footage of ants scurrying across your kitchen counter and generates completely unnecessary athletic statistics like Top Speed, Crumbs Burned, and Rest Breaks.
