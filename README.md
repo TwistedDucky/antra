@@ -6,6 +6,7 @@
 
 > **Live :** [ANTRA](https://antra-7vjb.onrender.com/)
 > (Won't work because opencv is resource intensive since a whole video is processed.)
+> Run it on your pc to see the full magic, you can see the over-engineered motion mask and tracking debug view.
 
 
 ## Basic Details
@@ -38,8 +39,8 @@ For Hardware:
 - Breadcrumbs (to bribe the athlete)
 - A magnifying glass (optional, for intense coaching)
 
-### Implementation
-For Software:
+### Technical Diagram
+![Technical Diagram](./screenshots/Antra_td.png)
 
 # Installation
 ```bash
@@ -63,7 +64,6 @@ uvicorn backend.main:app --reload
 Then open `http://localhost:8000` and prepare to be amazed.
 
 ### Project Documentation
-For Software:
 
 # Screenshots 
 ![Screenshot1](./screenshots/1.png)
