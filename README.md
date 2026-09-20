@@ -88,9 +88,6 @@ For Hardware:
 - Breadcrumbs (to bribe the athlete)
 - A magnifying glass (optional, for intense coaching)
 
-### Technical Diagram
-![Technical Diagram](./screenshots/Antra_td.png)
-
 ### Technical Diagram for wizards
 ![Technical Diagram](./screenshots/Antra_td2.png)
 
