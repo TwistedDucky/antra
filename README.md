@@ -60,7 +60,7 @@ pip install -r requirements.txt
 # Terminal 1: Start the Computer Vision Backend
 uvicorn backend.main:app --reload
 ```
-Then open `http://localhost:5500` and prepare to be amazed.
+Then open `http://localhost:8000` and prepare to be amazed.
 
 ### Project Documentation
 For Software:
