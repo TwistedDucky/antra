@@ -91,6 +91,9 @@ For Hardware:
 ### Technical Diagram
 ![Technical Diagram](./screenshots/Antra_td.png)
 
+### Technical Diagram for wizards
+![Technical Diagram](./screenshots/Antra_td2.png)
+
 # Installation
 ```bash
 # Clone the repository
