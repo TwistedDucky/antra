@@ -17,9 +17,18 @@
 ### Team Members
 - Jion Biju - Vimal Jyothi Engineering College
 - Richard Rarichan - Vimal Jyothi Engineering College
+  
+*Special thanks to our highly cooperative test subject, **ANDAPPAN**, who graciously provided us with the first input video and then immediately scooted away into the unknown.
+
+His current whereabouts remain classified.
+
+Without ANDAPPAN’s groundbreaking contribution, extensive fieldwork, and suspiciously fast escape, this completely unnecessary platform would never have been possible.
+
+We salute you, wherever you are. 🫡🐜
+
 
 ### Project Description
-ANTRA is a premium, over-engineered athletic tracking platform designed exclusively for ants. It analyzes video footage of ants scurrying across your kitchen counter and generates completely unnecessary athletic statistics like Top Speed, Crumbs Burned, and Rest Breaks. 
+ANTRA is a premium, over-engineered athletic tracking platform designed exclusively for ants. It analyzes video footage of ants scurrying across your kitchen counter and generates completely unnecessary athletic statistics like Top Speed, Crumbs Burned, and Rest Breaks.
 
 ### The Problem (that doesn't exist)
 Humans get all the credit for running marathons, while ants walk the equivalent of 500 miles a day just to steal a grain of sugar. Yet, there is zero fitness tracking infrastructure for the formicidae community. Furthermore, ants notoriously refuse to carry smartphones, making traditional GPS tracking impossible.
