@@ -41,7 +41,7 @@ would never have been possible.
 
 **ANDAPPAN — 2026**  
 *Test Subject • Pioneer • Fugitive*
-
+---
 ### Project Description
 ANTRA is a premium, over-engineered athletic tracking platform designed exclusively for ants. It analyzes video footage of ants scurrying across your kitchen counter and generates completely unnecessary athletic statistics like Top Speed, Crumbs Burned, and Rest Breaks.
 
