@@ -329,6 +329,26 @@ def analyze_video(video_path: str):
         int(fps * STOP_DURATION)
     )
 
+    # Hysteresis for stop detection:
+    #
+    # Below STOP_MOVEMENT_THRESHOLD:
+    #     treat movement as tracking noise / stationary
+    #
+    # Above RESUME_MOVEMENT_THRESHOLD:
+    #     possible real movement
+    #
+    # We require several consecutive frames above the
+    # resume threshold before ending a stop.
+    STOP_MOVEMENT_THRESHOLD = 2.0
+    RESUME_MOVEMENT_THRESHOLD = 4.0
+    RESUME_CONFIRM_FRAMES = 5
+
+    # Possible movement while the ant is stopped.
+    # We only count it as real movement if it persists.
+    resume_frames = 0
+    resume_distance = 0.0
+    resume_max_speed = 0.0
+
     lost_frames = 0
 
     # Candidate confirmation
@@ -735,97 +755,170 @@ def analyze_video(video_path: str):
                 position
             )
 
-            if movement >= MIN_MOVEMENT:
+            # =================================================
+            # STOP / MOVEMENT DETECTION WITH HYSTERESIS
+            # =================================================
+            #
+            # We use two different thresholds:
+            #
+            #   < 2 px  -> stationary
+            #   > 4 px  -> possible real movement
+            #
+            # Anything between them is treated as noise.
+            #
+            # When the ant is stopped, movement must also stay
+            # above 4 px for several consecutive frames before
+            # the stop is ended.
+            # =================================================
 
-                # =================================================
-                # ANT IS MOVING
-                # =================================================
-
-                total_distance += movement
-
-                speed_pixels = (
-                    movement * fps
-                )
-
-                max_speed = max(
-                    max_speed,
-                    speed_pixels
-                )
-
-                moving_time += 1 / fps
+            if not is_stopped:
 
                 # ------------------------------------------------
-                # If we were stopped, the stop has ended.
-                # Finalize its duration.
+                # ANT IS CURRENTLY MOVING
                 # ------------------------------------------------
 
-                if is_stopped:
+                if movement < STOP_MOVEMENT_THRESHOLD:
 
-                    if stop_start_frame is not None:
+                    # Tiny movement is treated as tracking noise.
+                    stationary_frames += 1
 
-                        stop_duration = (
+                    if (
+                        stationary_frames
+                        >= STOP_CONFIRM_FRAMES
+                    ):
+
+                        is_stopped = True
+
+                        stop_count += 1
+
+                        # Work backwards so the stop begins at
+                        # the first stationary frame.
+                        stop_start_frame = (
                             frame_number
-                            - stop_start_frame
-                        ) / fps
-
-                        longest_stop = max(
-                            longest_stop,
-                            stop_duration
+                            - stationary_frames
+                            + 1
                         )
 
-                    is_stopped = False
-                    stop_start_frame = None
+                        # Reset possible-resume state.
+                        resume_frames = 0
+                        resume_distance = 0.0
+                        resume_max_speed = 0.0
 
-                # Reset stationary counter
-                stationary_frames = 0
+                else:
+
+                    # The ant is still moving.
+                    total_distance += movement
+
+                    speed_pixels = (
+                        movement * fps
+                    )
+
+                    max_speed = max(
+                        max_speed,
+                        speed_pixels
+                    )
+
+                    moving_time += 1 / fps
+
+                    stationary_frames = 0
 
             else:
 
-                # =================================================
-                # ANT IS NOT MOVING
-                # =================================================
-
-                stationary_frames += 1
-
                 # ------------------------------------------------
-                # Only declare a stop after enough consecutive
-                # stationary frames.
+                # ANT IS CURRENTLY STOPPED
                 # ------------------------------------------------
 
-                if (
-                    not is_stopped
-                    and
-                    stationary_frames >= STOP_CONFIRM_FRAMES
-                ):
+                if movement < RESUME_MOVEMENT_THRESHOLD:
 
-                    is_stopped = True
+                    # 1-3 pixels of movement is ignored.
+                    # This prevents tracking jitter from ending
+                    # the stop.
+                    resume_frames = 0
+                    resume_distance = 0.0
+                    resume_max_speed = 0.0
 
-                    stop_count += 1
+                else:
 
-                    # Work backwards so the stop duration includes
-                    # the frames during which we were confirming it.
-                    stop_start_frame = (
-                        frame_number
-                        - stationary_frames
-                        + 1
+                    # Possible real movement.
+                    resume_frames += 1
+                    resume_distance += movement
+
+                    speed_pixels = (
+                        movement * fps
                     )
 
-                # ------------------------------------------------
-                # Update longest stop while still stopped
-                # ------------------------------------------------
-
-                if is_stopped and stop_start_frame is not None:
-
-                    current_stop_duration = (
-                        frame_number
-                        - stop_start_frame
-                        + 1
-                    ) / fps
-
-                    longest_stop = max(
-                        longest_stop,
-                        current_stop_duration
+                    resume_max_speed = max(
+                        resume_max_speed,
+                        speed_pixels
                     )
+
+                    # Only resume walking after several
+                    # consecutive movement frames.
+                    if (
+                        resume_frames
+                        >= RESUME_CONFIRM_FRAMES
+                    ):
+
+                        # Add the confirmed movement.
+                        total_distance += resume_distance
+
+                        moving_time += (
+                            resume_frames / fps
+                        )
+
+                        max_speed = max(
+                            max_speed,
+                            resume_max_speed
+                        )
+
+                        # The stop actually ended when the
+                        # first confirmed movement started.
+                        if stop_start_frame is not None:
+
+                            stop_end_frame = (
+                                frame_number
+                                - resume_frames
+                                + 1
+                            )
+
+                            stop_duration = (
+                                stop_end_frame
+                                - stop_start_frame
+                            ) / fps
+
+                            longest_stop = max(
+                                longest_stop,
+                                stop_duration
+                            )
+
+                        is_stopped = False
+                        stop_start_frame = None
+
+                        stationary_frames = 0
+                        resume_frames = 0
+                        resume_distance = 0.0
+                        resume_max_speed = 0.0
+
+            # ------------------------------------------------
+            # Update longest stop while still stopped.
+            # ------------------------------------------------
+
+            if (
+                is_stopped
+                and
+                stop_start_frame is not None
+            ):
+
+                current_stop_duration = (
+                    frame_number
+                    - stop_start_frame
+                    + 1
+                ) / fps
+
+                longest_stop = max(
+                    longest_stop,
+                    current_stop_duration
+                )
 
             # ----------------------------------------------------
             # Save trajectory
@@ -930,6 +1023,20 @@ def analyze_video(video_path: str):
                     0,
                     255,
                     255
+                )
+
+            elif resume_frames > 0:
+
+                status = (
+                    f"ANT MOVING? "
+                    f"{resume_frames}/"
+                    f"{RESUME_CONFIRM_FRAMES}"
+                )
+
+                status_color = (
+                    255,
+                    165,
+                    0
                 )
 
             else:
