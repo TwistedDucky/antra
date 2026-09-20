@@ -77,9 +77,9 @@ Then open `http://localhost:8000` and prepare to be amazed.
 *The Results Dashboard. Shows the exact route, crumbs burned, and the number of times the ant stopped for a "meeting".*
 
 ![Screenshot4](./screenshots/4.png)
-*Activity Dashboard. We found the ant! Look at those impressive crumb-burning stats.*
-![Screenshot5](./screenshots/5.png)
 *The Expedition Map. A complete visual representation of an ant wandering aimlessly.*
+![Screenshot5](./screenshots/5.png)
+*Activity Dashboard. We found the ant! Look at those impressive crumb-burning stats.*
 ![Screenshot6](./screenshots/6.png)
 *OpenCV output.*
 
