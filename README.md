@@ -86,13 +86,8 @@ Then open `http://localhost:8000` and prepare to be amazed.
 
 
 ### Project Demo
-# Video 1:AntraDemo
-
-[https://www.youtube.com/watch?v=kh1ZGcWbOM8]
-
- # Video 2:Internal Working of Antra
-[https://www.youtube.com/watch?v=RmvI3SCjMr4&feature=youtu.be]
-
+# Video 1:AntraDemo on Local host
+[https://www.youtube.com/watch?v=N6Sd7NWsxX8]
 
 
 
