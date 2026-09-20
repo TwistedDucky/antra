@@ -2,37 +2,302 @@ import cv2
 import math
 
 
+# ============================================================
+# CONFIGURATION
+# ============================================================
+
 PIXELS_PER_ANT_METER = 100.0
 
+# Contour filtering
 MIN_AREA = 20
-MAX_AREA = 5000
+MAX_AREA = 2500
 
+# Movement
 MIN_MOVEMENT = 1.5
-MAX_JUMP = 100
+MAX_JUMP = 80
 
+# Smoothing
 SMOOTHING_ALPHA = 0.30
-MAX_LOST_FRAMES = 10
 
-# New tracking reliability settings
-MIN_CONFIRM_FRAMES = 3
-MAX_CANDIDATE_JUMP = 60
-MIN_CONTOUR_AREA = 20
+# Tracking
+MAX_LOST_FRAMES = 15
+MIN_CONFIRM_FRAMES = 4
+MAX_CANDIDATE_JUMP = 50
 
+# Stationary ant
+STATIONARY_SEARCH_RADIUS = 35
+
+# Camera motion
+MAX_CAMERA_SHIFT = 30
+
+# ORB
+ORB_FEATURES = 500
+
+
+# ============================================================
+# CAMERA MOTION ESTIMATION
+# ============================================================
+
+def estimate_camera_motion(previous_gray, current_gray, orb):
+    """
+    Estimate global camera translation between two frames.
+
+    Returns:
+        dx, dy
+
+    If estimation fails:
+        0, 0
+    """
+
+    keypoints1, descriptors1 = orb.detectAndCompute(
+        previous_gray,
+        None
+    )
+
+    keypoints2, descriptors2 = orb.detectAndCompute(
+        current_gray,
+        None
+    )
+
+    if descriptors1 is None or descriptors2 is None:
+        return 0.0, 0.0
+
+    if len(keypoints1) < 5 or len(keypoints2) < 5:
+        return 0.0, 0.0
+
+    matcher = cv2.BFMatcher(
+        cv2.NORM_HAMMING,
+        crossCheck=True
+    )
+
+    matches = matcher.match(
+        descriptors1,
+        descriptors2
+    )
+
+    if len(matches) < 5:
+        return 0.0, 0.0
+
+    matches = sorted(
+        matches,
+        key=lambda m: m.distance
+    )
+
+    # Only use reasonably good matches
+    matches = matches[:50]
+
+    shifts_x = []
+    shifts_y = []
+
+    for match in matches:
+
+        p1 = keypoints1[
+            match.queryIdx
+        ].pt
+
+        p2 = keypoints2[
+            match.trainIdx
+        ].pt
+
+        dx = p2[0] - p1[0]
+        dy = p2[1] - p1[1]
+
+        # Ignore absurd camera movements
+        if abs(dx) <= MAX_CAMERA_SHIFT and \
+           abs(dy) <= MAX_CAMERA_SHIFT:
+
+            shifts_x.append(dx)
+            shifts_y.append(dy)
+
+    if len(shifts_x) < 3:
+        return 0.0, 0.0
+
+    # Median is resistant to bad feature matches
+    dx = float(
+        sorted(shifts_x)[len(shifts_x) // 2]
+    )
+
+    dy = float(
+        sorted(shifts_y)[len(shifts_y) // 2]
+    )
+
+    return dx, dy
+
+
+# ============================================================
+# APPLY CAMERA STABILIZATION
+# ============================================================
+
+def stabilize_frame(
+    gray,
+    dx,
+    dy
+):
+
+    transform = cv2.getRotationMatrix2D(
+        (gray.shape[1] / 2, gray.shape[0] / 2),
+        0,
+        1
+    )
+
+    transform[0, 2] -= dx
+    transform[1, 2] -= dy
+
+    stabilized = cv2.warpAffine(
+        gray,
+        transform,
+        (
+            gray.shape[1],
+            gray.shape[0]
+        ),
+        borderMode=cv2.BORDER_REFLECT
+    )
+
+    return stabilized
+
+
+# ============================================================
+# CANDIDATE SCORING
+# ============================================================
+
+def score_candidate(
+    candidate,
+    previous_position,
+    frame_width,
+    frame_height
+):
+
+    score = 0.0
+
+    x = candidate["x"]
+    y = candidate["y"]
+    area = candidate["area"]
+
+    # --------------------------------------------------------
+    # 1. Area score
+    # --------------------------------------------------------
+
+    # Ants are expected to be relatively small.
+    ideal_area = 100
+
+    area_difference = abs(
+        area - ideal_area
+    )
+
+    area_score = max(
+        0,
+        1 - (
+            area_difference /
+            500
+        )
+    )
+
+    score += area_score * 25
+
+    # --------------------------------------------------------
+    # 2. Shape score
+    # --------------------------------------------------------
+
+    aspect_ratio = candidate["aspect_ratio"]
+
+    if 1.0 <= aspect_ratio <= 3.5:
+
+        score += 20
+
+    elif aspect_ratio <= 5:
+
+        score += 10
+
+    # --------------------------------------------------------
+    # 3. Distance from previous ant
+    # --------------------------------------------------------
+
+    if previous_position is not None:
+
+        distance = math.dist(
+            previous_position,
+            (x, y)
+        )
+
+        if distance <= 20:
+
+            score += 40
+
+        elif distance <= 40:
+
+            score += 30
+
+        elif distance <= 60:
+
+            score += 15
+
+        else:
+
+            score -= 30
+
+    # --------------------------------------------------------
+    # 4. Avoid frame edges
+    # --------------------------------------------------------
+
+    margin = 10
+
+    if (
+        margin < x < frame_width - margin
+        and
+        margin < y < frame_height - margin
+    ):
+
+        score += 5
+
+    # --------------------------------------------------------
+    # 5. Compact object bonus
+    # --------------------------------------------------------
+
+    width = candidate["w"]
+    height = candidate["h"]
+
+    if width <= 100 and height <= 100:
+
+        score += 10
+
+    return score
+
+
+# ============================================================
+# MAIN VIDEO ANALYSIS
+# ============================================================
 
 def analyze_video(video_path: str):
 
-    cap = cv2.VideoCapture(video_path)
+    cap = cv2.VideoCapture(
+        video_path
+    )
 
     if not cap.isOpened():
-        raise ValueError("Could not open video")
 
-    fps = cap.get(cv2.CAP_PROP_FPS)
+        raise ValueError(
+            "Could not open video"
+        )
+
+    fps = cap.get(
+        cv2.CAP_PROP_FPS
+    )
 
     if fps <= 0:
         fps = 30.0
 
     total_frames = int(
-        cap.get(cv2.CAP_PROP_FRAME_COUNT)
+        cap.get(
+            cv2.CAP_PROP_FRAME_COUNT
+        )
+    )
+
+    # --------------------------------------------------------
+    # ORB camera motion detector
+    # --------------------------------------------------------
+
+    orb = cv2.ORB_create(
+        nfeatures=ORB_FEATURES
     )
 
     previous_gray = None
@@ -41,6 +306,7 @@ def analyze_video(video_path: str):
     smoothed_position = None
 
     trajectory = []
+    debug_trajectory = []
 
     total_distance = 0.0
     max_speed = 0.0
@@ -52,10 +318,7 @@ def analyze_video(video_path: str):
 
     lost_frames = 0
 
-    # ------------------------------------------------
     # Candidate confirmation
-    # ------------------------------------------------
-
     candidate_position = None
     candidate_frames = 0
 
@@ -69,6 +332,12 @@ def analyze_video(video_path: str):
             break
 
         frame_number += 1
+
+        debug_frame = frame.copy()
+
+        # ====================================================
+        # PREPROCESS
+        # ====================================================
 
         gray = cv2.cvtColor(
             frame,
@@ -85,52 +354,100 @@ def analyze_video(video_path: str):
 
             previous_gray = gray
 
+            cv2.imshow(
+                "Ant Tracking Debug",
+                debug_frame
+            )
+
+            if (
+                cv2.waitKey(1) & 0xFF
+                == ord("q")
+            ):
+                break
+
             continue
 
-        # --------------------------------------------
-        # Motion detection
-        # --------------------------------------------
+        # ====================================================
+        # CAMERA MOTION
+        # ====================================================
+
+        camera_dx, camera_dy = (
+            estimate_camera_motion(
+                previous_gray,
+                gray,
+                orb
+            )
+        )
+
+        # Stabilize current frame
+        stabilized_gray = stabilize_frame(
+            gray,
+            camera_dx,
+            camera_dy
+        )
+
+        # ====================================================
+        # MOTION DETECTION
+        # ====================================================
 
         difference = cv2.absdiff(
             previous_gray,
-            gray
+            stabilized_gray
         )
 
-        _, threshold = cv2.threshold(
+        _, motion_mask = cv2.threshold(
             difference,
-            15,
+            18,
             255,
             cv2.THRESH_BINARY
         )
 
+        # Remove tiny noise
         kernel = cv2.getStructuringElement(
             cv2.MORPH_ELLIPSE,
             (3, 3)
         )
 
-        threshold = cv2.morphologyEx(
-            threshold,
+        motion_mask = cv2.morphologyEx(
+            motion_mask,
             cv2.MORPH_OPEN,
             kernel
         )
 
-        threshold = cv2.dilate(
-            threshold,
+        # Connect nearby pixels
+        motion_mask = cv2.morphologyEx(
+            motion_mask,
+            cv2.MORPH_CLOSE,
+            kernel
+        )
+
+        motion_mask = cv2.dilate(
+            motion_mask,
             kernel,
             iterations=1
         )
 
+        # ====================================================
+        # FIND CONTOURS
+        # ====================================================
+
         contours, _ = cv2.findContours(
-            threshold,
+            motion_mask,
             cv2.RETR_EXTERNAL,
             cv2.CHAIN_APPROX_SIMPLE
         )
 
         candidates = []
 
+        frame_height, frame_width = (
+            gray.shape
+        )
+
         for contour in contours:
 
-            area = cv2.contourArea(contour)
+            area = cv2.contourArea(
+                contour
+            )
 
             if area < MIN_AREA:
                 continue
@@ -138,82 +455,204 @@ def analyze_video(video_path: str):
             if area > MAX_AREA:
                 continue
 
-            x, y, w, h = cv2.boundingRect(contour)
-
-            center_x = x + w / 2
-            center_y = y + h / 2
-
-            # ----------------------------------------
-            # Basic shape filtering
-            # ----------------------------------------
+            x, y, w, h = (
+                cv2.boundingRect(
+                    contour
+                )
+            )
 
             if w <= 0 or h <= 0:
                 continue
 
-            aspect_ratio = max(w, h) / min(w, h)
+            aspect_ratio = (
+                max(w, h) /
+                min(w, h)
+            )
 
-            # Extremely thin single-pixel noise
-            if aspect_ratio > 8:
+            # Reject extremely thin objects
+            if aspect_ratio > 6:
                 continue
 
-            candidates.append({
+            center_x = (
+                x + w / 2
+            )
+
+            center_y = (
+                y + h / 2
+            )
+
+            candidate = {
+
                 "x": center_x,
+
                 "y": center_y,
+
                 "area": area,
+
                 "w": w,
-                "h": h
-            })
+
+                "h": h,
+
+                "aspect_ratio":
+                    aspect_ratio
+            }
+
+            candidate["score"] = (
+                score_candidate(
+                    candidate,
+                    previous_position,
+                    frame_width,
+                    frame_height
+                )
+            )
+
+            candidates.append(
+                candidate
+            )
 
         selected = None
+        tracking = False
 
-        # ==================================================
-        # CASE 1
-        # We don't currently have an ant
-        # ==================================================
+        # ====================================================
+        # TRACKING MODE
+        # ====================================================
 
-        if previous_position is None:
+        if previous_position is not None:
+
+            # ------------------------------------------------
+            # Find candidates near previous ant position
+            # ------------------------------------------------
+
+            nearby = []
+
+            for candidate in candidates:
+
+                distance = math.dist(
+
+                    previous_position,
+
+                    (
+                        candidate["x"],
+                        candidate["y"]
+                    )
+                )
+
+                if distance <= MAX_JUMP:
+
+                    nearby.append(
+                        (
+                            candidate["score"],
+                            distance,
+                            candidate
+                        )
+                    )
+
+            # ------------------------------------------------
+            # Select highest scoring nearby candidate
+            # ------------------------------------------------
+
+            if nearby:
+
+                nearby.sort(
+                    key=lambda item:
+                        item[0],
+                    reverse=True
+                )
+
+                selected = nearby[0][2]
+
+                current_position = (
+
+                    selected["x"],
+
+                    selected["y"]
+                )
+
+                lost_frames = 0
+
+                tracking = True
+
+            else:
+
+                # ------------------------------------------------
+                # No moving contour near ant
+                #
+                # The ant may simply be standing still.
+                # Keep the last position for a while.
+                # ------------------------------------------------
+
+                lost_frames += 1
+
+                if (
+                    lost_frames
+                    <= MAX_LOST_FRAMES
+                ):
+
+                    current_position = (
+                        previous_position[0],
+                        previous_position[1]
+                    )
+
+                    tracking = True
+
+                else:
+
+                    current_position = None
+                    tracking = False
+
+        # ====================================================
+        # SEARCH MODE
+        # ====================================================
+
+        else:
+
+            current_position = None
 
             if candidates:
 
-                # Prefer a reasonably sized candidate.
-                #
-                # We don't simply use the largest object because
-                # large floor/grout motion can fool the tracker.
-
+                # Score all candidates
                 candidates.sort(
-                    key=lambda c: c["area"],
+                    key=lambda c:
+                        c["score"],
                     reverse=True
                 )
 
                 best = candidates[0]
 
                 position = (
+
                     best["x"],
                     best["y"]
                 )
 
-                # ------------------------------------------
-                # Confirm candidate over multiple frames
-                # ------------------------------------------
+                # ------------------------------------------------
+                # Candidate confirmation
+                # ------------------------------------------------
 
                 if candidate_position is None:
 
                     candidate_position = position
+
                     candidate_frames = 1
 
                 else:
 
                     distance = math.dist(
+
                         candidate_position,
+
                         position
                     )
 
-                    if distance <= MAX_CANDIDATE_JUMP:
+                    if (
+                        distance
+                        <= MAX_CANDIDATE_JUMP
+                    ):
 
                         candidate_frames += 1
 
-                        # Smooth candidate position
                         candidate_position = (
+
                             (
                                 candidate_position[0]
                                 + position[0]
@@ -227,210 +666,554 @@ def analyze_video(video_path: str):
 
                     else:
 
-                        # Probably unrelated noise
                         candidate_position = position
+
                         candidate_frames = 1
 
-                # Only accept after appearing consistently
-                if candidate_frames >= MIN_CONFIRM_FRAMES:
+                # ------------------------------------------------
+                # Draw candidate
+                # ------------------------------------------------
 
-                    selected = (
+                cv2.circle(
+
+                    debug_frame,
+
+                    (
+                        int(
+                            candidate_position[0]
+                        ),
+                        int(
+                            candidate_position[1]
+                        )
+                    ),
+
+                    8,
+
+                    (0, 255, 255),
+
+                    2
+                )
+
+                cv2.putText(
+
+                    debug_frame,
+
+                    (
+                        f"Candidate "
+                        f"{candidate_frames}/"
+                        f"{MIN_CONFIRM_FRAMES}"
+                    ),
+
+                    (20, 90),
+
+                    cv2.FONT_HERSHEY_SIMPLEX,
+
+                    0.6,
+
+                    (0, 255, 255),
+
+                    2
+                )
+
+                # ------------------------------------------------
+                # Confirm ant
+                # ------------------------------------------------
+
+                if (
+                    candidate_frames
+                    >= MIN_CONFIRM_FRAMES
+                ):
+
+                    current_position = (
                         candidate_position[0],
                         candidate_position[1]
                     )
 
-                    previous_position = selected
-                    smoothed_position = selected
+                    previous_position = (
+                        current_position
+                    )
+
+                    smoothed_position = (
+                        current_position
+                    )
 
                     candidate_position = None
                     candidate_frames = 0
+
+                    lost_frames = 0
+
+                    tracking = True
 
             else:
 
                 candidate_position = None
                 candidate_frames = 0
 
-        # ==================================================
-        # CASE 2
-        # We already have an ant
-        # ==================================================
+        # ====================================================
+        # PROCESS TRACKED POSITION
+        # ====================================================
 
-        else:
+        if (
+            tracking
+            and
+            current_position is not None
+        ):
 
-            if candidates:
+            # ------------------------------------------------
+            # Smooth position
+            # ------------------------------------------------
 
-                # Find candidates close to the previous
-                # ant position.
+            if smoothed_position is None:
 
-                nearby = []
-
-                for candidate in candidates:
-
-                    distance = math.dist(
-                        previous_position,
-                        (
-                            candidate["x"],
-                            candidate["y"]
-                        )
-                    )
-
-                    if distance <= MAX_JUMP:
-
-                        nearby.append(
-                            (
-                                distance,
-                                candidate
-                            )
-                        )
-
-                if nearby:
-
-                    # Closest candidate wins
-                    nearby.sort(
-                        key=lambda item: item[0]
-                    )
-
-                    selected = nearby[0][1]
-
-                    current_position = (
-                        selected["x"],
-                        selected["y"]
-                    )
-
-                    lost_frames = 0
-
-                    # --------------------------------------
-                    # Smooth movement
-                    # --------------------------------------
-
-                    if smoothed_position is None:
-
-                        smoothed_position = current_position
-
-                    else:
-
-                        smoothed_position = (
-
-                            SMOOTHING_ALPHA *
-                            current_position[0]
-                            +
-                            (1 - SMOOTHING_ALPHA) *
-                            smoothed_position[0],
-
-                            SMOOTHING_ALPHA *
-                            current_position[1]
-                            +
-                            (1 - SMOOTHING_ALPHA) *
-                            smoothed_position[1]
-                        )
-
-                    position = smoothed_position
-
-                    # --------------------------------------
-                    # Calculate movement
-                    # --------------------------------------
-
-                    movement = math.dist(
-                        previous_position,
-                        position
-                    )
-
-                    if movement >= MIN_MOVEMENT:
-
-                        total_distance += movement
-
-                        speed_pixels = (
-                            movement * fps
-                        )
-
-                        max_speed = max(
-                            max_speed,
-                            speed_pixels
-                        )
-
-                        moving_time += 1 / fps
-
-                        current_stop = 0.0
-
-                    else:
-
-                        current_stop += 1 / fps
-
-                        # Count a stop only when the ant
-                        # has actually remained still.
-
-                        if (
-                            current_stop >= 1.0
-                            and
-                            (
-                                current_stop - 1 / fps
-                            ) < 1.0
-                        ):
-
-                            stop_count += 1
-
-                        longest_stop = max(
-                            longest_stop,
-                            current_stop
-                        )
-
-                    trajectory.append({
-                        "frame": frame_number,
-                        "time": round(
-                            frame_number / fps,
-                            3
-                        ),
-                        "x": round(
-                            position[0],
-                            2
-                        ),
-                        "y": round(
-                            position[1],
-                            2
-                        )
-                    })
-
-                    previous_position = position
-
-                else:
-
-                    # No candidate close enough
-                    lost_frames += 1
+                smoothed_position = (
+                    current_position
+                )
 
             else:
 
-                lost_frames += 1
+                smoothed_position = (
 
-        # ==================================================
-        # LOST TRACK
-        # ==================================================
+                    SMOOTHING_ALPHA *
+                    current_position[0]
+                    +
+                    (1 -
+                     SMOOTHING_ALPHA) *
+                    smoothed_position[0],
 
-        if lost_frames > MAX_LOST_FRAMES:
+                    SMOOTHING_ALPHA *
+                    current_position[1]
+                    +
+                    (1 -
+                     SMOOTHING_ALPHA) *
+                    smoothed_position[1]
+                )
 
-            previous_position = None
-            smoothed_position = None
+            position = (
+                smoothed_position
+            )
 
-            candidate_position = None
-            candidate_frames = 0
+            # ------------------------------------------------
+            # Movement
+            # ------------------------------------------------
 
-            lost_frames = 0
+            movement = math.dist(
 
-        previous_gray = gray
+                previous_position,
+
+                position
+            )
+
+            if movement >= MIN_MOVEMENT:
+
+                total_distance += movement
+
+                speed_pixels = (
+                    movement * fps
+                )
+
+                max_speed = max(
+                    max_speed,
+                    speed_pixels
+                )
+
+                moving_time += (
+                    1 / fps
+                )
+
+                current_stop = 0.0
+
+            else:
+
+                current_stop += (
+                    1 / fps
+                )
+
+                # Count stop after one second
+                if (
+                    current_stop >= 1.0
+                    and
+                    (
+                        current_stop -
+                        1 / fps
+                    ) < 1.0
+                ):
+
+                    stop_count += 1
+
+                longest_stop = max(
+                    longest_stop,
+                    current_stop
+                )
+
+            # ------------------------------------------------
+            # Save trajectory
+            # ------------------------------------------------
+
+            trajectory.append({
+
+                "frame":
+                    frame_number,
+
+                "time":
+                    round(
+                        frame_number / fps,
+                        3
+                    ),
+
+                "x":
+                    round(
+                        position[0],
+                        2
+                    ),
+
+                "y":
+                    round(
+                        position[1],
+                        2
+                    )
+            })
+
+            debug_trajectory.append(
+
+                (
+                    int(position[0]),
+                    int(position[1])
+                )
+            )
+
+            previous_position = position
+
+        # ====================================================
+        # DRAW TRAJECTORY
+        # ====================================================
+
+        for i in range(
+            1,
+            len(debug_trajectory)
+        ):
+
+            cv2.line(
+
+                debug_frame,
+
+                debug_trajectory[i - 1],
+
+                debug_trajectory[i],
+
+                (0, 255, 0),
+
+                2
+            )
+
+        # ====================================================
+        # DRAW ANT
+        # ====================================================
+
+        if (
+            tracking
+            and
+            previous_position is not None
+        ):
+
+            ant_x = int(
+                previous_position[0]
+            )
+
+            ant_y = int(
+                previous_position[1]
+            )
+
+            # Outer circle
+            cv2.circle(
+
+                debug_frame,
+
+                (
+                    ant_x,
+                    ant_y
+                ),
+
+                12,
+
+                (0, 0, 255),
+
+                2
+            )
+
+            # Center
+            cv2.circle(
+
+                debug_frame,
+
+                (
+                    ant_x,
+                    ant_y
+                ),
+
+                3,
+
+                (0, 0, 255),
+
+                -1
+            )
+
+        # ====================================================
+        # STATUS
+        # ====================================================
+
+        if tracking:
+
+            status = "TRACKING"
+
+            status_color = (
+                0,
+                255,
+                0
+            )
+
+        elif lost_frames > 0:
+
+            status = (
+                f"LOST {lost_frames}"
+            )
+
+            status_color = (
+                0,
+                0,
+                255
+            )
+
+        else:
+
+            status = "SEARCHING"
+
+            status_color = (
+                0,
+                255,
+                255
+            )
+
+        # ====================================================
+        # CURRENT SPEED
+        # ====================================================
+
+        current_speed = 0.0
+
+        if (
+            len(debug_trajectory)
+            >= 2
+        ):
+
+            p1 = debug_trajectory[-2]
+            p2 = debug_trajectory[-1]
+
+            movement = math.dist(
+                p1,
+                p2
+            )
+
+            current_speed = (
+
+                movement *
+                fps /
+                PIXELS_PER_ANT_METER
+            )
+
+        distance_meters = (
+
+            total_distance /
+            PIXELS_PER_ANT_METER
+        )
+
+        # ====================================================
+        # DEBUG TEXT
+        # ====================================================
+
+        cv2.putText(
+
+            debug_frame,
+
+            status,
+
+            (20, 30),
+
+            cv2.FONT_HERSHEY_SIMPLEX,
+
+            0.8,
+
+            status_color,
+
+            2
+        )
+
+        cv2.putText(
+
+            debug_frame,
+
+            (
+                f"Distance: "
+                f"{distance_meters:.2f} ant m"
+            ),
+
+            (20, 60),
+
+            cv2.FONT_HERSHEY_SIMPLEX,
+
+            0.6,
+
+            (255, 255, 255),
+
+            2
+        )
+
+        cv2.putText(
+
+            debug_frame,
+
+            (
+                f"Speed: "
+                f"{current_speed:.2f} ant m/s"
+            ),
+
+            (20, 120),
+
+            cv2.FONT_HERSHEY_SIMPLEX,
+
+            0.6,
+
+            (255, 255, 255),
+
+            2
+        )
+
+        cv2.putText(
+
+            debug_frame,
+
+            (
+                f"Camera: "
+                f"{camera_dx:.1f}, "
+                f"{camera_dy:.1f}"
+            ),
+
+            (20, 150),
+
+            cv2.FONT_HERSHEY_SIMPLEX,
+
+            0.6,
+
+            (255, 255, 255),
+
+            2
+        )
+
+        cv2.putText(
+
+            debug_frame,
+
+            (
+                f"Frame: "
+                f"{frame_number}/"
+                f"{total_frames}"
+            ),
+
+            (20, 180),
+
+            cv2.FONT_HERSHEY_SIMPLEX,
+
+            0.6,
+
+            (255, 255, 255),
+
+            2
+        )
+
+        cv2.putText(
+
+            debug_frame,
+
+            (
+                f"Stops: "
+                f"{stop_count}"
+            ),
+
+            (20, 210),
+
+            cv2.FONT_HERSHEY_SIMPLEX,
+
+            0.6,
+
+            (255, 255, 255),
+
+            2
+        )
+
+        cv2.putText(
+
+            debug_frame,
+
+            "Q = quit",
+
+            (20, 240),
+
+            cv2.FONT_HERSHEY_SIMPLEX,
+
+            0.5,
+
+            (200, 200, 200),
+
+            1
+        )
+
+        # ====================================================
+        # SHOW DEBUG WINDOWS
+        # ====================================================
+
+        cv2.imshow(
+            "Ant Tracking Debug",
+            debug_frame
+        )
+
+        # Motion mask
+        cv2.imshow(
+            "Motion Mask",
+            motion_mask
+        )
+
+        # ====================================================
+        # QUIT
+        # ====================================================
+
+        key = cv2.waitKey(1) & 0xFF
+
+        if key == ord("q"):
+
+            break
+
+        previous_gray = stabilized_gray
+
+    # ========================================================
+    # CLEANUP
+    # ========================================================
 
     cap.release()
 
-    # ======================================================
+    cv2.destroyAllWindows()
+
+    # ========================================================
     # STATISTICS
-    # ======================================================
+    # ========================================================
 
     distance = (
+
         total_distance /
         PIXELS_PER_ANT_METER
     )
 
     average_speed_pixels = (
 
-        total_distance / moving_time
+        total_distance /
+        moving_time
 
         if moving_time > 0
 
@@ -438,18 +1221,21 @@ def analyze_video(video_path: str):
     )
 
     average_speed = (
+
         average_speed_pixels /
         PIXELS_PER_ANT_METER
     )
 
     ant_max_speed = (
+
         max_speed /
         PIXELS_PER_ANT_METER
     )
 
     elapsed_time = (
 
-        total_frames / fps
+        total_frames /
+        fps
 
         if fps > 0
 
@@ -468,6 +1254,7 @@ def analyze_video(video_path: str):
     if ant_max_speed > 0:
 
         terrain_score = int(
+
             (
                 1 -
                 average_speed /
@@ -488,45 +1275,53 @@ def analyze_video(video_path: str):
         terrain_score = 0
 
     fitness_score = int(
+
         min(
             100,
+
             distance * 5 +
             average_speed * 10
         )
     )
 
-    # ======================================================
+    # ========================================================
     # ACHIEVEMENTS
-    # ======================================================
+    # ========================================================
 
     achievements = []
 
     if trajectory:
+
         achievements.append(
             "First Steps"
         )
 
     if distance >= 10:
+
         achievements.append(
             "10 AM Club"
         )
 
     if distance >= 25:
+
         achievements.append(
             "Marathon Ant"
         )
 
     if ant_max_speed >= 1:
+
         achievements.append(
             "Speed Demon"
         )
 
     if stop_count >= 10:
+
         achievements.append(
             "Professional Rest"
         )
 
     if moving_time >= 20:
+
         achievements.append(
             "Endurance Ant"
         )
@@ -591,7 +1386,6 @@ def analyze_video(video_path: str):
         "trajectory":
             trajectory
     }
-
 
 def generate_activity_title(
     distance,
