@@ -7,6 +7,7 @@
 > **Live :** [ANTRA](https://antra-7vjb.onrender.com/)
 > (Won't work because opencv is resource intensive since a whole video is processed.)
 > Run it on your pc to see the full magic, you can see the over-engineered motion mask and tracking debug view.
+##If you don't have an ant of your own you can use our sample input video present in the uploads folder.
 
 
 ## Basic Details
